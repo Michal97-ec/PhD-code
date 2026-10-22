@@ -1,0 +1,2581 @@
+
+install.packages("viridis")
+
+install.packages("rstatix")
+
+install.packages("ggpubr")
+
+install.packages("mgcv")
+
+install.packages("gratia")
+
+install.packages("lme4")
+
+install.packages("lmerTest")
+
+library(lubridate)
+library(circular)   
+library(overlap)    
+library(patchwork)  
+library(cowplot)
+library(viridis)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(svglite)
+library(tidyverse)
+library(rstatix)
+library(patchwork)
+library(ggpubr)
+library(mgcv)
+library(gratia)
+library(lme4)
+library(lmerTest)
+
+#Mortality per city per year
+
+CityMortality_df<-as.data.frame(TotalMortalityPerPlace)
+
+#smooth
+plot_city_mortality_smooth <- function(data) {
+  
+  # Convert city columns to long format
+  data_long <- data %>%
+    pivot_longer(
+      cols = -Year,
+      names_to = "City",
+      values_to = "Collisions"
+    )
+  
+  # Calculate total mortality across all cities for each year
+  data_total <- data_long %>%
+    group_by(Year) %>%
+    summarise(
+      Collisions = sum(Collisions, na.rm = TRUE)
+    )
+  
+  p <- ggplot(data_long, aes(x = Year, y = Collisions, color = City)) +
+    
+    
+    # Smooth trend for each city
+    geom_smooth(
+      method = "loess",
+      se = FALSE,
+      linewidth = 1
+    ) +
+    
+    # Total mortality line
+    geom_smooth(
+      data = data_total,
+      aes(x = Year, y = Collisions, color = "Total"),
+      method = "loess",
+      se = FALSE,
+      linewidth = 1.2,
+      inherit.aes = FALSE
+    )+
+    
+    scale_x_continuous(
+      limits = c(2014, 2023),
+      breaks = 2014:2023,
+      expand = c(0.01, 0)
+    ) +
+    
+    scale_y_continuous(
+      limits = c(0, 1000),
+      breaks = seq(0, 1000, by = 100),
+      expand = expansion(mult = c(0, 0.02))
+    )+
+    
+    # Explicit colours for the three cities
+    scale_color_manual(
+      values = c(
+        "Kraków" = "#1B9E77",
+        "Niepołomice" = "#D95F02",
+        "Wieliczka" = "#7570B3",
+        "Total" = "black"
+      ),
+      breaks = c("Kraków", "Niepołomice", "Wieliczka", "Total")
+    ) +
+    
+    labs(
+      title = "Number of Yearly Collisions in Each City",
+      x = "Year",
+      y = "Number of Collisions",
+      color = "City"
+    ) +
+    
+    theme_classic(base_size = 12) +
+    theme(
+      plot.title = element_text(
+        hjust = 0.5,
+        face = "bold",
+        size = 14
+      ),
+      
+      axis.text = element_text(
+        size = 11,
+        color = "black"
+      ),
+      
+      axis.title = element_text(size = 12),
+      
+      axis.line = element_line(linewidth = 0.6),
+      axis.ticks = element_line(linewidth = 0.5),
+      
+      legend.position = "top",
+      legend.title = element_text(size = 11),
+      legend.text = element_text(size = 10),
+      
+      panel.grid = element_blank(),
+      
+      plot.margin = margin(10, 15, 10, 10)
+    )
+  
+  return(p)
+}
+
+CityMortalityGraph<-plot_city_mortality_smooth(CityMortality_df)
+
+print(CityMortalityGraph)
+
+
+#svg
+
+ggsave("C:/Migracja/RStudio/WVCGraphs/CityMortalityGraph.svg", CityMortalityGraph, device = "svg")
+
+
+#Light and dark
+
+all_data<-as.data.frame(DayNight)
+
+cat("\n🔄 Converting Excel datetime to radians using lubridate...\n")
+
+# Display first few original values
+cat("Original Excel datetime values (first 5):\n")
+print(head(all_data$Time, 5))
+
+# Convert using lubridate::as.POSIXct
+# Excel origin is typically "1899-12-30" for Windows
+
+all_data$datetime <- as.POSIXct(all_data$Time)
+
+if(all(is.na(all_data$datetime))) {
+  cat("⚠️ First attempt failed. Trying without origin...\n")
+  all_data$datetime <- lubridate::as.POSIXct(all_data$Godzina)
+}
+
+# Extract time components using lubridate functions
+all_data$hour <- hour(all_data$datetime)
+all_data$minute <- minute(all_data$datetime)
+all_data$second <- second(all_data$datetime)
+
+all_data$decimal_hour <- all_data$hour + 
+  all_data$minute/60 + 
+  all_data$second/3600
+
+# Convert to radians (0 to 2π)
+# 24 hours = 2π radians
+all_data$radians <- all_data$decimal_hour * (2 * pi / 24)
+
+Daytime_df<- all_data %>% select(Species, radians)
+
+print(Daytime_df)
+
+library(ggplot2)
+
+Daytimeplot<-ggplot(Daytime_df, aes(x = radians, color = , fill = )) +
+  
+  geom_density(alpha = 0.2, linewidth = 1) +
+  
+  # Convert radians to time-of-day labels
+  scale_x_continuous(
+    limits = c(0, 2*pi),
+    breaks = seq(0, 2*pi, length.out = 5),
+    labels = c("00:00", "06:00", "12:00", "18:00", "24:00")
+  ) +
+  
+  labs(
+    title = "Overall mortality rates",
+    x = "Time of Day",
+    y = "Mortality"
+  ) +
+  geom_vline(xintercept = c(6/24*2*pi, 18/24*2*pi),
+             linetype = "dashed", color = "gray50")+
+  theme_classic(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.text = element_text(size = 11),
+    axis.title = element_text(size = 12),
+    legend.position = "top"
+  )
+
+print(Daytimeplot)
+
+#svg
+
+ggsave("C:/Migracja/RStudio/WVCGraphs/Daytimeplot.svg", Daytimeplot, device = "svg")
+
+
+#Yearly Daytime
+
+all_datayear<-as.data.frame(YearsDayNight)
+
+cat("\n🔄 Converting Excel datetime to radians using lubridate...\n")
+
+# Display first few original values
+cat("Original Excel datetime values (first 5):\n")
+print(head(all_datayear$Time, 5))
+
+# Convert using lubridate::as.POSIXct
+# Excel origin is typically "1899-12-30" for Windows
+
+all_datayear$datetime <- as.POSIXct(all_datayear$Time)
+
+if(all(is.na(all_datayear$datetime))) {
+  cat("⚠️ First attempt failed. Trying without origin...\n")
+  all_datayear$datetime <- lubridate::as.POSIXct(all_data$Godzina)
+}
+
+# Extract time components using lubridate functions
+all_datayear$hour <- hour(all_data$datetime)
+all_datayear$minute <- minute(all_data$datetime)
+all_datayear$second <- second(all_data$datetime)
+
+all_datayear$decimal_hour <- all_datayear$hour + 
+  all_datayear$minute/60 + 
+  all_datayear$second/3600
+
+# Convert to radians (0 to 2π)
+# 24 hours = 2π radians
+all_datayear$radians <- all_datayear$decimal_hour * (2 * pi / 24)
+
+Daytimeyear_df<- all_datayear %>% select(Species, Year, radians)
+
+print(Daytimeyear_df)
+
+
+
+Daytimeyearplot<-ggplot(
+  Daytimeyear_df,
+  aes(x = radians, color = factor(Year), group = Year)
+) +
+  
+  geom_density(linewidth = 1, adjust = 1.5) +
+  
+  # Convert radians to time-of-day labels
+  scale_x_continuous(
+    limits = c(0, 2*pi),
+    breaks = seq(0, 2*pi, length.out = 5),
+    labels = c("00:00", "06:00", "12:00", "18:00", "24:00")
+  ) +
+  
+  labs(
+    title = "Overall Mortality Rates by Year",
+    x = "Time of Day",
+    y = "Density",
+    color = "Year"
+  ) +
+  
+  # Dawn/dusk lines
+  geom_vline(
+    xintercept = c(6/24*2*pi, 18/24*2*pi),
+    linetype = "dashed",
+    color = "gray50"
+  ) +
+  
+  theme_classic(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.text = element_text(size = 11),
+    axis.title = element_text(size = 12),
+    legend.position = "top"
+  )
+
+print(Daytimeyearplot)
+
+ggsave("C:/Migracja/RStudio/WVCGraphs/Daytimeyearplot.svg", Daytimeyearplot, device = "svg")
+
+
+ggplot(
+  Daytimeyear_df,
+  aes(x = radians, color = factor(Year), linetype = factor(Year), group = Year)
+) +
+  
+  geom_freqpoly(
+    bins = 48,
+    linewidth = 1
+  ) +
+  
+  scale_color_viridis_d(option = "A") +  # 👈 handles 10+ cleanly
+  
+  scale_x_continuous(
+    limits = c(0, 2*pi),
+    breaks = seq(0, 2*pi, length.out = 13),
+    labels = c("00:00", "02:00", "04:00", "06:00","08:00","10:00", "12:00", "14:00","16:00", "18:00","20:00","22:00", "24:00")
+  ) +
+  
+  labs(
+    title = "Overall Collision Counts by Year",
+    x = "Time of Day",
+    y = "Collision Count",
+    color = "Year",
+    linetype = "Year"
+  ) +
+  
+  geom_vline(
+    xintercept = c(6/24*2*pi, 18/24*2*pi),
+    linetype = "dashed",
+    color = "gray50"
+  ) +
+  
+  theme_classic(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    legend.position = "top"
+  )
+
+
+
+
+
+
+
+#Objective 1
+#Kruskal-Wallis
+
+
+
+# Sum collisions across all years per City and Season
+df_summed <- Seasons_df %>%
+  group_by(City, Season, Year) %>%
+  summarise(total_collisions = sum(Collisions, na.rm = TRUE), .groups = "drop")
+
+#Seasons Kruskal-Wallis
+kw_results_per_city <- Seasons_df %>%
+  group_by(City) %>%
+  kruskal_test(Collisions ~ Season) %>%
+  ungroup()
+
+print(kw_results_per_city)
+
+# BH-Adjusted Post-hoc Dunn test
+dunn_results_per_city <- Seasons_df %>%
+  group_by(City) %>%
+  dunn_test(
+    Collisions ~ Season,
+    p.adjust.method = "BH"
+  ) %>%
+  add_significance() %>%
+  ungroup()
+
+
+print(dunn_results_per_city)
+
+# Dominant season per City across all years
+dominant_season_per_city <- Seasons_df %>%
+  group_by(City, Season) %>%
+  summarise(median_collisions = median(Collisions, na.rm = TRUE), .groups = "drop") %>%
+  group_by(City) %>%
+  slice_max(median_collisions, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  rename(dominant_season = Season)
+
+# Combined output
+full_results_per_city <- kw_results_per_city %>%
+  left_join(dominant_season_per_city, by = "City")
+
+print(full_results_per_city)
+
+
+#Wilcox test day-night
+
+df_summed_w <- df_long %>%
+  group_by(City, TimeOfDay, Year) %>%
+  summarise(total_collisions = sum(Collisions, na.rm = TRUE), .groups = "drop")
+
+results_per_city_w <- df_summed_w %>%
+  group_by(City) %>%
+  wilcox_test(
+    total_collisions ~ TimeOfDay,
+    paired = FALSE,
+    p.adjust.method = "BH"
+  ) %>%
+  add_significance() %>%
+  ungroup()
+
+dominant_time_per_city_w <- df_summed_w %>%
+  group_by(City, TimeOfDay) %>%
+  summarise(median_collisions = median(total_collisions, na.rm = TRUE), .groups = "drop") %>%
+  group_by(City) %>%
+  slice_max(median_collisions, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  rename(dominant_time = TimeOfDay)
+
+daynight_results_per_city_w <- results_per_city_w %>%
+  left_join(dominant_time_per_city_b, by = "City")
+
+print(daynight_results_per_city_w)
+
+#Graph for day-night, colored
+
+DayNightCityYear_df<-as.data.frame(DayNightCityYear)
+
+cat("\n🔄 Converting Excel datetime to radians using lubridate...\n")
+
+# Display first few original values
+cat("Original Excel datetime values (first 5):\n")
+print(head(DayNightCityYear_df$Time, 5))
+
+# Convert using lubridate::as.POSIXct
+# Excel origin is typically "1899-12-30" for Windows
+
+DayNightCityYear_df$datetime <- as.POSIXct(DayNightCityYear_df$Time)
+
+if(all(is.na(DayNightCityYear_df$datetime))) {
+  cat("⚠️ First attempt failed. Trying without origin...\n")
+  DayNightCityYear_df$datetime <- lubridate::as.POSIXct(all_data$Godzina)
+}
+
+# Extract time components using lubridate functions
+DayNightCityYear_df$hour <- hour(DayNightCityYear_df$datetime)
+DayNightCityYear_df$minute <- minute(DayNightCityYear_df$datetime)
+DayNightCityYear_df$second <- second(DayNightCityYear_df$datetime)
+
+DayNightCityYear_df$decimal_hour <- DayNightCityYear_df$hour + 
+  DayNightCityYear_df$minute/60 + 
+  DayNightCityYear_df$second/3600
+
+# Convert to radians (0 to 2π)
+# 24 hours = 2π radians
+DayNightCityYear_df$radians <- DayNightCityYear_df$decimal_hour * (2 * pi / 24)
+
+Daytimeyear_df<- DayNightCityYear_df %>% select(City, Year, radians)
+
+print(Daytimeyear_df)
+
+#Plotting:
+
+total_df <- Daytimeyear_df %>%
+  group_by(radians) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  mutate(City = "Total")
+
+# Make sure your main df has a City column
+# then bind the total in
+plot_df <- Daytimeyear_df %>%
+  mutate(City = str_to_title(str_replace_all(City, " ", "")))
+
+binned_df <- plot_df %>%
+  mutate(bin = cut(radians, breaks = seq(0, 2*pi, length.out = 49), 
+                   include.lowest = TRUE, labels = FALSE)) %>%
+  group_by(City, bin) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  mutate(bin_mid = (bin - 0.5) / 48 * 2 * pi)
+
+# Fit LOESS per City and find peak hour
+
+peak_hours <- binned_df %>%
+  group_by(City) %>%
+  group_modify(~ {
+    
+    # Sort by radians first
+    .x <- .x %>% arrange(bin_mid)
+    
+    # LOESS
+    fit <- loess(count ~ bin_mid, data = .x, span = 0.3)
+    fitted_vals <- predict(fit, newdata = .x)
+    
+    n <- length(fitted_vals)
+    
+    # Identify local maxima
+    is_peak <- c(
+      FALSE,
+      fitted_vals[2:(n - 1)] > fitted_vals[1:(n - 2)] &
+        fitted_vals[2:(n - 1)] > fitted_vals[3:n],
+      FALSE
+    )
+    
+    peaks <- data.frame(
+      bin_mid        = .x$bin_mid[is_peak],
+      fitted         = fitted_vals[is_peak],
+      raw_collisions = .x$count[is_peak]
+    )
+    
+    if (nrow(peaks) == 0) {
+      return(data.frame())
+    }
+    
+    # Return primary peak only
+    peaks %>%
+      slice_max(fitted, n = 1, with_ties = FALSE) %>%
+      mutate(peak_rank = "Primary peak")
+    
+  }) %>%
+  ungroup() %>%
+  
+  # Convert radians to hours
+  mutate(
+    peak_hour = (bin_mid / (2 * pi)) * 24,
+    peak_hour = peak_hour %% 24,
+    
+    peak_hh = floor(peak_hour),
+    peak_mm = round((peak_hour - peak_hh) * 60),
+    
+    peak_hh = ifelse(peak_mm == 60, peak_hh + 1, peak_hh),
+    peak_mm = ifelse(peak_mm == 60, 0,            peak_mm),
+    peak_hh = peak_hh %% 24,
+    
+    peak_time = sprintf("%02d:%02d", peak_hh, peak_mm)
+  ) %>%
+  
+  select(
+    City,
+    peak_rank,
+    peak_time,
+    peak_hour,
+    bin_mid,
+    fitted,
+    raw_collisions
+  )
+
+
+print(peak_hours)
+
+DayNightCityYearPlot <- ggplot() +
+  
+  # Smoothed colored lines per City
+  geom_smooth(
+    data = binned_df,
+    aes(x = bin_mid, y = count, color = City, group = City),
+    method = "loess",
+    span = 0.3,       # adjust for more/less smoothing
+    se = FALSE,
+    linewidth = 1
+  ) +
+  
+  # Smoothed black total line
+  geom_smooth(
+    data = binned_total,
+    aes(x = bin_mid, y = count, group = City),
+    method = "loess",
+    span = 0.3,
+    se = FALSE,
+    linewidth = 1.2,
+    color = "black",
+    linetype = "solid"
+  ) +
+  geom_rect(
+    aes(xmin = 6/24*2*pi,   xmax = 18/24*2*pi,
+        ymin = -Inf,         ymax = Inf),
+    fill = "#FFE680", alpha = 0.12
+  ) +
+  
+  # Nighttime background: 18:00 - 24:00
+  geom_rect(
+    aes(xmin = 18/24*2*pi,  xmax = 2*pi,
+        ymin = -Inf,         ymax = Inf),
+    fill = "#AEC6E8", alpha = 0.12
+  ) +
+  
+  geom_rect(
+    aes(xmin = 0/6*2*pi,  xmax = 2*pi,
+        ymin = -Inf,         ymax = Inf),
+    fill = "#AEC6E8", alpha = 0.12
+  ) +
+  
+  scale_color_manual(
+    values = c(
+      "Kraków"       = "#1B9E77",
+      "Niepołomice"  = "#D95F02",
+      "Wieliczka"    = "#7570B3"
+    )
+  ) +
+  
+  scale_x_continuous(
+    limits = c(0, 2*pi),
+    breaks = seq(0, 2*pi, length.out = 13),
+    labels = c("00:00","02:00","04:00","06:00","08:00","10:00",
+               "12:00","14:00","16:00","18:00","20:00","22:00","24:00")
+  ) +
+  
+  geom_vline(
+    xintercept = c(6/24*2*pi, 18/24*2*pi),
+    linetype = "dashed",
+    color = "black"
+  ) +
+#Maxima for each city  
+  geom_segment(
+    aes(
+      x    = 8.25/24*2*pi,
+      xend = 8.25/24*2*pi,
+      y    = -Inf,
+      yend = peak_hours$fitted[peak_hours$City == "Kraków" & peak_hours$peak_rank == "Primary peak"]
+    ),
+    linetype = "solid",
+    lwd      = 1,
+    color    = "#1B9E77"
+  )+
+  geom_segment(
+    aes(
+      x    = 9.75/24*2*pi,
+      xend = 9.75/24*2*pi,
+      y    = -Inf,
+      yend = peak_hours$fitted[peak_hours$City == "Niepołomice" & peak_hours$peak_rank == "Primary peak"]
+    ),
+    linetype = "solid",
+    lwd      = 1,
+    color    = "#D95F02"
+  )+
+  geom_segment(
+    aes(
+      x    = 8.75/24*2*pi,
+      xend = 8.75/24*2*pi,
+      y    = -Inf,
+      yend = peak_hours$fitted[peak_hours$City == "Wieliczka" & peak_hours$peak_rank == "Primary peak"]
+    ),
+    linetype = "solid",
+    lwd      = 1,
+    color    = "#7570B3"
+  )+
+  labs(
+    title = "Collision Counts by City",
+    x = "Time of Day",
+    y = "Collision Count",
+    color = "City"
+  ) +
+  
+  theme_classic(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    legend.position = "top"
+  )
+
+print(DayNightCityYearPlot)
+
+ggsave("C:/Migracja/RStudio/WVCGraphs/DayNightCityYearPlot.svg", DayNightCityYearPlot, device = "svg")
+
+
+#Top 5 species
+
+
+# Filter to selected city
+
+
+#Top5yearlytotals
+
+Totalstop5_df<-as.data.frame(Top_5_yearly_per_city)
+
+city_list <- unique(Totalstop5_df$City)
+
+plots <- lapply(city_list, function(ct) {
+  
+  city_data <- Totalstop5_df %>%
+    dplyr::filter(City == ct)
+  
+  ggplot(city_data, aes(x = Year, y = wvc, color = Species, group = Species)) +
+    
+    geom_line(linewidth = 1) +
+    geom_point(size = 2) +
+    
+    scale_x_continuous(
+      breaks = min(Totalstop5_df$Year):max(Totalstop5_df$Year),
+      expand = c(0.01, 0)
+    ) +
+    
+    scale_y_continuous(
+      limits = c(0, NA),
+      expand = expansion(mult = c(0, 0.05))
+    ) +
+    
+    scale_color_brewer(palette = "Set1", name = "Species") +
+    
+    labs(
+      title = ct,
+      x     = "Year",
+      y     = "WVC Count"
+    ) +
+    
+    theme_classic(base_size = 12) +
+    theme(
+      plot.title      = element_text(hjust = 0.5, face = "bold", size = 13),
+      axis.text.x     = element_text(size = 10, color = "black", angle = 45, hjust = 1),
+      axis.text.y     = element_text(size = 10, color = "black"),
+      axis.title      = element_text(size = 11, face = "bold"),
+      legend.position = "bottom",
+      legend.title    = element_text(size = 10),
+      legend.text     = element_text(size = 9),
+      panel.grid      = element_blank()
+    )
+})
+
+print(plots)
+
+
+
+print(Totalstop5_df)
+
+
+
+city_list <- unique(Totalstop5_df$City)
+
+species_list <- unique(Totalstop5_df$Species)
+
+totalsplots <- lapply(city_list, function(ct) {
+  
+  lapply(species_list, function(sp) {
+    
+    plot_data <- Totalstop5_df %>%
+      dplyr::filter(City == ct, Species == sp)
+    
+    if (nrow(plot_data) == 0) return(NULL)
+    
+    ggplot(plot_data, aes(x = Year, y = wvc)) +
+      
+
+      
+      geom_smooth(
+        method    = "loess",
+        se        = FALSE,
+        linewidth = 1,
+        color     = "black"
+      ) +
+      
+      scale_x_continuous(
+        breaks = min(Totalstop5_df$Year):max(Totalstop5_df$Year),
+        expand = c(0.01, 0)
+      ) +
+      
+      scale_y_continuous(
+        limits = c(0, NA),
+        expand = expansion(mult = c(0, 0.05))
+      ) +
+      
+      labs(
+        title = paste(ct, "—", sp),
+        x     = "Year",
+        y     = "WVC Count"
+      ) +
+      
+      theme_classic(base_size = 12) +
+      theme(
+        plot.title  = element_text(hjust = 0.5, face = "bold", size = 12),
+        axis.text.x = element_text(size = 9, color = "black", angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 9, color = "black"),
+        axis.title  = element_text(size = 10, face = "bold"),
+        panel.grid  = element_blank()
+      )
+  }) %>%
+    purrr::compact()
+})
+
+all_plots <- purrr::flatten(totalsplots)
+
+print(all_plots)
+
+Top5graphsyear<-wrap_plots(all_plots, ncol = length(species_list))
+
+print(Top5graphsyear)
+
+#SVG
+ggsave("C:/Migracja/RStudio/WVCGraphs/YearCityTop5.svg", Top5graphsyear, device = "svg")
+
+
+
+#Stats- pearson:
+Top5pearson_results <- Totalstop5_df %>%
+  group_by(City, Species) %>%
+  summarise(
+    n_years = sum(complete.cases(Year, wvc)),
+    
+    r = cor(Year, wvc, method = "pearson", use = "complete.obs"),
+    
+    p_value = cor.test(
+      Year,
+      wvc,
+      method = "pearson",
+      alternative = "greater"
+    )$p.value,
+    
+    .groups = "drop"
+  ) %>%
+  mutate(
+    p_adjusted = p.adjust(p_value, method = "BH"),
+    significant_increase = p_adjusted < 0.05 & r > 0
+  )
+
+print(Top5pearson_results)
+
+
+print(Top5graphsyear)
+
+
+#SeasonalTop5
+
+Top5Seasons_df<-as.data.frame(Top5Seasons)
+
+Top5Seasons_City_list <- unique(Top5Seasons_df$City)
+Top5Seasons_species_list <- unique(Top5Seasons_df$Species)
+
+
+
+#Statistics- wilcox and plots
+
+
+
+
+Top5Seasonsplots <- lapply(city_list, function(ct) {
+  
+  lapply(species_list, function(sp) {
+    
+    Top5Seasonsplots_data <- Top5Seasons_df %>%
+      dplyr::filter(City == ct, Species == sp)
+    
+    if (nrow(Top5Seasonsplots_data) == 0) return(NULL)
+    
+    # BH-corrected pairwise Wilcoxon
+    pwc <- Top5Seasonsplots_data %>%
+      wilcox_test(WVC ~ Season, p.adjust.method = "BH") %>%
+      add_significance() %>%
+      add_xy_position(x = "Season")  # calculates bracket positions
+    
+    ggboxplot(
+      Top5Seasonsplots_data,
+      x          = "Season",
+      y          = "WVC",
+      fill       = "White",
+      color      = "black",
+      add        = "none",
+      
+    ) +
+      
+      # Add BH-corrected significance brackets, hide non-significant
+      stat_pvalue_manual(
+        pwc %>% dplyr::filter(p.adj < 0.05),
+        label       = "p.adj.signif",
+        hide.ns     = TRUE
+      ) +
+      
+      scale_y_continuous(
+        limits = c(0, NA),
+        expand = expansion(mult = c(0, 0.15))
+      ) +
+      
+      labs(
+        title = paste(ct, "—", sp),
+        x     = "Season",
+        y     = "WVC Count"
+      ) +
+      
+      theme_classic(base_size = 12) +
+      theme(
+        plot.title  = element_text(hjust = 0.5, face = "bold", size = 12),
+        axis.text.x = element_text(size = 9, color = "black", angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 9, color = "black"),
+        axis.title  = element_text(size = 10, face = "bold"),
+        panel.grid  = element_blank()
+      )
+  }) %>%
+    purrr::compact()
+})
+
+Top5Seasons_all_plots <- purrr::flatten(Top5Seasonsplots)
+
+
+Top5Seasons_wrap_plots<-wrap_plots(Top5Seasons_all_plots, ncol = length(species_list))
+
+print(Top5Seasons_wrap_plots)
+
+#SVG
+ggsave("C:/Migracja/RStudio/WVCGraphs/Top5Seasonsplots.svg", Top5Seasons_wrap_plots, device = "svg")
+
+#Table Of Wilcoxon Results
+Top5Seasons_Wilcox_Results <- Top5Seasons_df %>%
+  group_by(City, Species) %>%
+  wilcox_test(WVC ~ Season, p.adjust.method = "BH") %>%
+  add_significance() %>%
+  ungroup() %>%
+  select(City, Species, group1, group2, n1, n2, statistic, p, p.adj, p.adj.signif)
+
+print(Top5Seasons_Wilcox_Results)
+
+#Top5Time
+
+#Graph for day-night, colored
+
+Top5Hours_df<-as.data.frame(Top5Hours)
+
+cat("\n🔄 Converting Excel datetime to radians using lubridate...\n")
+
+# Display first few original values
+cat("Original Excel datetime values (first 5):\n")
+print(head(Top5Hours_df$Time, 5))
+
+# Convert using lubridate::as.POSIXct
+# Excel origin is typically "1899-12-30" for Windows
+
+Top5Hours_df$datetime <- as.POSIXct(Top5Hours_df$Time)
+
+if(all(is.na(Top5Hours_df$datetime))) {
+  cat("⚠️ First attempt failed. Trying without origin...\n")
+  Top5Hours_df$datetime <- lubridate::as.POSIXct(all_data$Godzina)
+}
+
+# Extract time components using lubridate functions
+Top5Hours_df$hour <- hour(Top5Hours_df$datetime)
+Top5Hours_df$minute <- minute(Top5Hours_df$datetime)
+Top5Hours_df$second <- second(Top5Hours_df$datetime)
+
+Top5Hours_df$decimal_hour <- Top5Hours_df$hour + 
+  Top5Hours_df$minute/60 + 
+  Top5Hours_df$second/3600
+
+# Convert to radians (0 to 2π)
+# 24 hours = 2π radians
+Top5Hours_df$radians <- Top5Hours_df$decimal_hour * (2 * pi / 24)
+
+Top5time_df<- Top5Hours_df %>% select(Species, radians)
+
+print(Top5time_df)
+
+#Plotting:
+
+
+# Count collisions per bin per species
+
+Top5counts <- Top5time_df %>%
+  mutate(
+    hour_bin = floor(radians / (2 * pi) * 24)
+  ) %>%
+  group_by(Species, hour_bin) %>%
+  summarise(count = n(), .groups = "drop")
+
+all_bins <- expand.grid(
+  Species  = unique(Top5time_df$Species),
+  hour_bin = 0:23
+)
+
+Top5hourbinned_species <- all_bins %>%
+  left_join(Top5counts, by = c("Species", "hour_bin")) %>%
+  mutate(
+    count   = replace_na(count, 0),
+    bin_mid = (hour_bin + 0.5) / 24 * 2 * pi
+  )
+
+top5species_list <- unique(Top5hourbinned_species$Species)
+
+
+Top5counts <- Top5time_df %>%
+  mutate(
+    hour_bin = floor(radians / (2 * pi) * 24)
+  ) %>%
+  group_by(Species, hour_bin) %>%
+  summarise(count = n(), .groups = "drop")
+
+all_bins <- expand.grid(
+  Species  = unique(Top5time_df$Species),
+  hour_bin = 0:23
+)
+
+Top5hourbinned_species <- all_bins %>%
+  left_join(Top5counts, by = c("Species", "hour_bin")) %>%
+  mutate(
+    count   = replace_na(count, 0),
+    bin_mid = (hour_bin + 0.5) / 24 * 2 * pi
+  )
+
+top5species_list <- unique(Top5hourbinned_species$Species)
+
+Top5Hour_plots <- lapply(top5species_list, function(sp) {
+  
+  Top5Hour_plot_data <- Top5hourbinned_species %>%
+    dplyr::filter(Species == sp)
+  
+  ggplot(Top5Hour_plot_data, aes(x = bin_mid, y = count)) +
+    
+    annotate("rect",
+             xmin = 0,           xmax = 6/24*2*pi,
+             ymin = -Inf,        ymax = Inf,
+             fill = "#AEC6E8",   alpha = 0.12
+    ) +
+    
+    annotate("rect",
+             xmin = 6/24*2*pi,  xmax = 18/24*2*pi,
+             ymin = -Inf,        ymax = Inf,
+             fill = "#FFE680",   alpha = 0.12
+    ) +
+    
+    annotate("rect",
+             xmin = 18/24*2*pi, xmax = 2*pi,
+             ymin = -Inf,        ymax = Inf,
+             fill = "#AEC6E8",   alpha = 0.12
+    ) +
+    
+    # LOESS fitted line replacing geom_col
+    geom_smooth(
+      method    = "loess",
+      se        = FALSE,
+      color     = "Black",
+      linewidth = 1,
+      span      = 0.4
+    ) +
+    
+    geom_vline(
+      xintercept = c(6/24*2*pi, 18/24*2*pi),
+      linetype   = "dashed",
+      color      = "gray50"
+    ) +
+    
+    scale_x_continuous(
+      limits = c(0, 2*pi),
+      breaks = seq(0, 2*pi, length.out = 13),
+      labels = c("00:00","02:00","04:00","06:00","08:00","10:00",
+                 "12:00","14:00","16:00","18:00","20:00","22:00","24:00"),
+      expand = c(0.01, 0)
+    ) +
+    
+    scale_y_continuous(
+      limits = c(0, NA),
+      expand = expansion(mult = c(0, 0.05))
+    ) +
+    
+    labs(
+      title = sp,
+      x     = "Time of Day",
+      y     = "Collision Count"
+    ) +
+    
+    theme_classic(base_size = 12) +
+    theme(
+      plot.title  = element_text(hjust = 0.5, face = "bold", size = 12),
+      axis.text.x = element_text(size = 8, color = "black", angle = 90, hjust = 1),
+      axis.text.y = element_text(size = 9, color = "black"),
+      axis.title  = element_text(size = 10, face = "bold"),
+      panel.grid  = element_blank()
+    )
+})
+
+wrapped_top5plots <- wrap_plots(Top5Hour_plots, ncol = 2)
+
+print(wrapped_top5plots)
+
+ggsave("C:/Migracja/RStudio/WVCGraphs/Top5HourPlots.svg", wrapped_top5plots, device = "svg")
+
+#Stats Binominal distribution test.
+
+Top5DayNight_df<-as.data.frame(Top5DayNight)
+
+Top5DauNight_results <- Top5DayNight_df %>%
+  rowwise() %>%
+  mutate(
+    total    = Day + Night,
+    p_value  = binom.test(Night, total, p = 0.5)$p.value,
+    estimate = binom.test(Night, total, p = 0.5)$estimate,
+    dominant = ifelse(Night > Day, "Night", "Day")
+  ) %>%
+  ungroup() %>%
+  mutate(
+    p_adj = p.adjust(p_value, method = "BH"),
+    significance = case_when(
+      p_adj < 0.001 ~ "***",
+      p_adj < 0.01  ~ "**",
+      p_adj < 0.05  ~ "*",
+      TRUE          ~ "ns"
+    )
+  )
+
+print(Top5DayNight_results)
+
+#Graphs with Percents
+
+#Percentage of Yearly Collisions in Each city
+
+#Statistics Spearman correlation
+
+pct_df_long <- PercentCityMortality_df %>%
+  pivot_longer(
+    cols      = -Year,
+    names_to  = "City",
+    values_to = "pct"
+  )
+
+cities <- unique(pct_df_long$City)
+
+pct_trend_results <- lapply(cities, function(ct) {
+  pct_city_data <- pct_df_long %>%
+    dplyr::filter(City == ct) %>%
+    arrange(Year)
+})
+
+pct_spearman_results <- lapply(cities, function(ct) {
+  
+  city_data <- pct_df_long %>%
+    dplyr::filter(City == ct) %>%
+    arrange(Year)
+  
+  spearman_test <- cor.test(city_data$Year, city_data$pct, method = "spearman")
+  
+  data.frame(
+    City      = ct,
+    rho       = spearman_test$estimate,
+    p_value   = spearman_test$p.value,
+    trend     = ifelse(spearman_test$estimate > 0, "Increasing", "Decreasing")
+  )
+}) %>%
+  bind_rows() %>%
+  mutate(
+    p_adj        = p.adjust(p_value, method = "BH"),
+    significance = case_when(
+      p_adj < 0.001 ~ "***",
+      p_adj < 0.01  ~ "**",
+      p_adj < 0.05  ~ "*",
+      TRUE          ~ "ns"
+    )
+  )
+
+print(pct_spearman_results)
+
+
+
+PercentCityMortality_df<-as.data.frame(PercentMortalityPlace)
+
+#smooth
+percent_plot_city_mortality_smooth <- function(data) {
+  
+  # Convert city columns to long format
+  data_long <- data %>%
+    pivot_longer(
+      cols = -Year,
+      names_to = "City",
+      values_to = "Collisions"
+    )
+  
+  # Calculate total mortality across all cities for each year
+  data_total <- data_long %>%
+    group_by(Year) %>%
+    summarise(
+      Collisions = sum(Collisions, na.rm = TRUE)
+    )
+  
+  p <- ggplot(data_long, aes(x = Year, y = Collisions, color = City)) +
+    
+    
+    # Smooth trend for each city
+    geom_smooth(
+      method = "loess",
+      se = FALSE,
+      linewidth = 1
+    ) +
+    
+    
+    
+    scale_x_continuous(
+      limits = c(2014, 2023),
+      breaks = 2014:2023,
+      expand = c(0.01, 0)
+    ) +
+    
+    scale_y_continuous(
+      limits = c(0, 0.2),
+      breaks = seq(0, 0.2, by = 0.02),
+      expand = expansion(mult = c(0, 0.02))
+    )+
+    
+    # Explicit colours for the three cities
+    scale_color_manual(
+      values = c(
+        "Kraków" = "#1B9E77",
+        "Niepołomice" = "#D95F02",
+        "Wieliczka" = "#7570B3"
+      ),
+      breaks = c("Kraków", "Niepołomice", "Wieliczka")
+    ) +
+    
+    labs(
+      title = "Yearly share Collisions in Each City",
+      x = "Year",
+      y = "% of Collisions",
+      color = "City"
+    ) +
+    
+    theme_classic(base_size = 12) +
+    theme(
+      plot.title = element_text(
+        hjust = 0.5,
+        face = "bold",
+        size = 14
+      ),
+      
+      axis.text = element_text(
+        size = 11,
+        color = "black"
+      ),
+      
+      axis.title = element_text(size = 12),
+      
+      axis.line = element_line(linewidth = 0.6),
+      axis.ticks = element_line(linewidth = 0.5),
+      
+      legend.position = "top",
+      legend.title = element_text(size = 11),
+      legend.text = element_text(size = 10),
+      
+      panel.grid = element_blank(),
+      
+      plot.margin = margin(10, 15, 10, 10)
+    )
+  
+  return(p)
+}
+
+
+PercentCityMortalityGraph<-percent_plot_city_mortality_smooth(PercentCityMortality_df)
+
+print(PercentCityMortalityGraph)
+
+ggsave("C:/Migracja/RStudio/WVCGraphs/PercentCityMortalityGraph.svg", PercentCityMortalityGraph, device = "svg")
+
+
+
+# % Season Kruskal-Wallis
+
+# Kruskal-Wallis per City
+percent_kw_results_per_city <- Seasons_df %>%
+  group_by(City) %>%
+  kruskal_test(Share_Collisions ~ Season) %>%
+  ungroup()
+
+print(percent_kw_results_per_city)
+
+# Post-hoc Dunn test with BH correction and bracket positions
+percent_dunn_results_per_city <- Seasons_df %>%
+  group_by(City) %>%
+  dunn_test(
+    Share_Collisions ~ Season,
+    p.adjust.method = "BH"
+  ) %>%
+  add_significance() %>%
+  add_xy_position(x = "Season") %>%
+  ungroup()
+
+print(percent_dunn_results_per_city)
+
+# Dominant season per City
+percent_dominant_season_per_city <- Seasons_df %>%
+  group_by(City, Season) %>%
+  summarise(median_share = median(Share_Collisions, na.rm = TRUE), .groups = "drop") %>%
+  group_by(City) %>%
+  slice_max(median_share, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  rename(dominant_season = Season)
+
+print(percent_dominant_season_per_city)
+
+# Combined KW + dominant season output
+percent_full_results_per_city <- percent_kw_results_per_city %>%
+  left_join(percent_dominant_season_per_city, by = "City")
+
+print(percent_full_results_per_city)
+
+# ===== BOXPLOT =====
+
+SeasonCity <- ggboxplot(
+  Seasons_df,
+  x     = "Season",
+  y     = "Share_Collisions",
+  fill  = "Season",
+  color = "black",
+  add   = "none",
+  outlier.shape = NA
+) +
+  
+  # Significant Dunn test brackets only
+  stat_pvalue_manual(
+    percent_dunn_results_per_city %>% dplyr::filter(p.adj < 0.05),
+    label   = "p.adj.signif",
+    hide.ns = TRUE
+  ) +
+  
+  # Dominant season annotation per City
+  geom_text(
+    data = percent_dominant_season_per_city,
+    aes(
+      x     = dominant_season,
+      y     = Inf,
+      label = paste("Dominant:", dominant_season)
+    ),
+    vjust        = 1.5,
+    size         = 3,
+    fontface     = "bold",
+    inherit.aes  = FALSE
+  ) +
+  
+  facet_wrap(~ City, scales = "free_x") +
+  
+  scale_y_continuous(
+    limits = c(0, 0.60),
+    breaks = seq(0, 0.60, by = 0.05),
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  
+  scale_fill_brewer(palette = "Set1", name = "Season") +
+  
+  labs(
+    x = "Season",
+    y = "% Collisions"
+  ) +
+  
+  theme_classic(base_size = 12) +
+  theme(
+    plot.title      = element_text(hjust = 0.5, face = "bold"),
+    axis.text.x     = element_text(size = 10, color = "black", angle = 45, hjust = 1),
+    axis.text.y     = element_text(size = 10, color = "black"),
+    axis.title      = element_text(size = 11, face = "bold"),
+    panel.grid.minor = element_blank(),
+    legend.position = "bottom",
+    strip.text      = element_text(face = "bold", size = 11)
+  )
+
+print(SeasonCity)
+
+#svg
+ggsave("C:/Migracja/RStudio/WVCGraphs/SeasonalCityBoxplot.svg", SeasonCity, device = "svg")
+
+
+#Peak hours of percentage of collisions in each city
+
+PercentHours_df<-as.data.frame(PercentHours)
+
+cat("\n🔄 Converting datetime to radians using lubridate...\n")
+
+cat("Original datetime values (first 5):\n")
+print(head(PercentHours_df$Time, 5))
+
+# Convert to POSIXct
+PercentHours_df$datetime <- as.POSIXct(PercentHours_df$Time)
+
+if(all(is.na(PercentHours_df$datetime))) {
+  cat("⚠️ First attempt failed. Trying with lubridate directly...\n")
+  PercentHours_df$datetime <- lubridate::as_datetime(PercentHours_df$Time)
+}
+
+# Extract time components
+PercentHours_df$hour   <- hour(PercentHours_df$datetime)
+PercentHours_df$minute <- minute(PercentHours_df$datetime)
+PercentHours_df$second <- second(PercentHours_df$datetime)
+
+# Decimal hour
+PercentHours_df$decimal_hour <- PercentHours_df$hour +
+  PercentHours_df$minute / 60 +
+  PercentHours_df$second / 3600
+
+# Convert to radians (0 to 2π)
+PercentHours_df$radians <- PercentHours_df$decimal_hour * (2 * pi / 24)
+
+# Keep only necessary columns
+PercentHours_df <- PercentHours_df %>%
+  select(City, radians)
+
+print(head(PercentHours_df))
+
+
+# Total percentage across all cities
+
+
+total_per_city <- PercentHours_df %>%
+  group_by(City) %>%
+  summarise(total = n(), .groups = "drop")
+
+binned_df_pct <- PercentHours_df %>%
+  mutate(bin = cut(radians, breaks = seq(0, 2*pi, length.out = 49),
+                   include.lowest = TRUE, labels = FALSE)) %>%
+  group_by(City, bin) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  mutate(bin_mid = (bin - 0.5) / 48 * 2 * pi) %>%
+  left_join(total_per_city, by = "City") %>%
+  mutate(pct = count / total * 100)
+
+# Total percentage across all cities
+total_per_all <- nrow(PercentHours_df)
+
+binned_total_pct <- PercentHours_df %>%
+  mutate(bin = cut(radians, breaks = seq(0, 2*pi, length.out = 49),
+                   include.lowest = TRUE, labels = FALSE)) %>%
+  group_by(bin) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  mutate(
+    bin_mid = (bin - 0.5) / 48 * 2 * pi,
+    pct     = count / total_per_all * 100,
+    City    = "Total"
+  )
+
+# Peak hours based on percentage
+peak_hours_pct <- binned_df_pct %>%
+  group_by(City) %>%
+  group_modify(~ {
+    
+    .x <- .x %>% arrange(bin_mid)
+    
+    fit <- loess(pct ~ bin_mid, data = .x, span = 0.3)
+    fitted_vals <- predict(fit, newdata = .x)
+    
+    n <- length(fitted_vals)
+    
+    is_peak <- c(
+      FALSE,
+      fitted_vals[2:(n - 1)] > fitted_vals[1:(n - 2)] &
+        fitted_vals[2:(n - 1)] > fitted_vals[3:n],
+      FALSE
+    )
+    
+    peaks <- data.frame(
+      bin_mid  = .x$bin_mid[is_peak],
+      fitted   = fitted_vals[is_peak],
+      raw_pct  = .x$pct[is_peak]
+    )
+    
+    if (nrow(peaks) == 0) return(data.frame())
+    
+    peaks %>%
+      slice_max(fitted, n = 1, with_ties = FALSE) %>%
+      mutate(peak_rank = "Primary peak")
+    
+  }) %>%
+  ungroup() %>%
+  mutate(
+    peak_hour = (bin_mid / (2 * pi)) * 24,
+    peak_hour = peak_hour %% 24,
+    peak_hh   = floor(peak_hour),
+    peak_mm   = round((peak_hour - peak_hh) * 60),
+    peak_hh   = ifelse(peak_mm == 60, peak_hh + 1, peak_hh),
+    peak_mm   = ifelse(peak_mm == 60, 0, peak_mm),
+    peak_hh   = peak_hh %% 24,
+    peak_time = sprintf("%02d:%02d", peak_hh, peak_mm)
+  ) %>%
+  select(City, peak_rank, peak_time, peak_hour, bin_mid, fitted, raw_pct)
+
+print(peak_hours_pct)
+
+# Plot
+DayNightCityYearPlot_pct <- ggplot() +
+  
+  geom_smooth(
+    data = binned_df_pct,
+    aes(x = bin_mid, y = pct, color = City, group = City),
+    method = "loess",
+    span = 0.3,
+    se = FALSE,
+    linewidth = 1
+  ) +
+  
+  
+  
+  annotate("rect",
+           xmin = 0,           xmax = 6/24*2*pi,
+           ymin = -Inf,        ymax = Inf,
+           fill = "#AEC6E8",   alpha = 0.12
+  ) +
+  annotate("rect",
+           xmin = 6/24*2*pi,  xmax = 18/24*2*pi,
+           ymin = -Inf,        ymax = Inf,
+           fill = "#FFE680",   alpha = 0.12
+  ) +
+  annotate("rect",
+           xmin = 18/24*2*pi, xmax = 2*pi,
+           ymin = -Inf,        ymax = Inf,
+           fill = "#AEC6E8",   alpha = 0.12
+  ) +
+  
+  geom_segment(
+    aes(
+      x    = peak_hours_pct$bin_mid[peak_hours_pct$City == "KRAKÓW"],
+      xend = peak_hours_pct$bin_mid[peak_hours_pct$City == "KRAKÓW"],
+      y    = -Inf,
+      yend = peak_hours_pct$fitted[peak_hours_pct$City == "KRAKÓW"]
+    ),
+    linetype = "solid", lwd = 1, color = "#1B9E77"
+  ) +
+  geom_segment(
+    aes(
+      x    = peak_hours_pct$bin_mid[peak_hours_pct$City == "NIEPOŁOMICE"],
+      xend = peak_hours_pct$bin_mid[peak_hours_pct$City == "NIEPOŁOMICE"],
+      y    = -Inf,
+      yend = peak_hours_pct$fitted[peak_hours_pct$City == "NIEPOŁOMICE"]
+    ),
+    linetype = "solid", lwd = 1, color = "#D95F02"
+  ) +
+  geom_segment(
+    aes(
+      x    = peak_hours_pct$bin_mid[peak_hours_pct$City == "WIELICZKA"],
+      xend = peak_hours_pct$bin_mid[peak_hours_pct$City == "WIELICZKA"],
+      y    = -Inf,
+      yend = peak_hours_pct$fitted[peak_hours_pct$City == "WIELICZKA"]
+    ),
+    linetype = "solid", lwd = 1, color = "#7570B3"
+  ) +
+  
+  geom_vline(
+    xintercept = c(6/24*2*pi, 18/24*2*pi),
+    linetype = "dashed",
+    color = "black"
+  ) +
+  
+  scale_color_manual(
+    values = c(
+      "KRAKÓW"      = "#1B9E77",
+      "NIEPOŁOMICE" = "#D95F02",
+      "WIELICZKA"   = "#7570B3"
+    )
+  ) +
+  
+  scale_x_continuous(
+    limits = c(0, 2*pi),
+    breaks = seq(0, 2*pi, length.out = 13),
+    labels = c("00:00","02:00","04:00","06:00","08:00","10:00",
+               "12:00","14:00","16:00","18:00","20:00","22:00","24:00")
+  ) +
+  
+  scale_y_continuous(
+    labels = scales::label_number(suffix = "%"),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  
+  labs(
+    title = "Collision Percentage by City and Time of Day",
+    x     = "Time of Day",
+    y     = "% of Total Collisions",
+    color = "City"
+  ) +
+  
+  theme_classic(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    legend.position = "top"
+  )
+
+print(DayNightCityYearPlot_pct)
+
+#SVG
+ggsave("C:/Migracja/RStudio/WVCGraphs/DayNightCityYearPlot_pct.svg", DayNightCityYearPlot_pct, device = "svg")
+
+#Percent Wilcox test day-night
+
+# Calculate total collisions per City and Year (denominator)
+pct_total_per_city_year <- df_summed_w %>%
+  group_by(City, Year) %>%
+  summarise(yearly_total = sum(total_collisions, na.rm = TRUE), .groups = "drop")
+
+# Add percentage column
+DayNight_pct_df <- df_summed_w %>%
+  left_join(pct_total_per_city_year, by = c("City", "Year")) %>%
+  mutate(pct_collisions = total_collisions / yearly_total * 100)
+
+# Wilcoxon test on percentages per City
+pct_results_per_city_w <- DayNight_pct_df %>%
+  group_by(City) %>%
+  wilcox_test(
+    pct_collisions ~ TimeOfDay,
+    paired = FALSE,
+    p.adjust.method = "BH"
+  ) %>%
+  add_significance() %>%
+  ungroup()
+
+print(pct_results_per_city_w)
+
+# Dominant time of day per City based on median percentage
+pct_dominant_time_per_city_w <- DayNight_pct_df %>%
+  group_by(City, TimeOfDay) %>%
+  summarise(median_pct = median(pct_collisions, na.rm = TRUE), .groups = "drop") %>%
+  group_by(City) %>%
+  slice_max(median_pct, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  rename(dominant_time = TimeOfDay)
+
+print(pct_dominant_time_per_city_w)
+
+# Combined output
+pct_daynight_results_per_city_w <- pct_results_per_city_w %>%
+  left_join(pct_dominant_time_per_city_w, by = "City")
+
+print(pct_daynight_results_per_city_w)
+
+
+
+
+
+
+#Percentage of Top 5 Species totals in each city in each year
+
+Top_5_yearly_percent_city_df <- as.data.frame(Top_5_yearly_percent_city)
+
+city_list    <- unique(Top_5_yearly_percent_city_df$City)
+species_list <- unique(Top_5_yearly_percent_city_df$Species)
+
+Top5PercentYearplots <- lapply(city_list, function(ct) {
+  
+  lapply(species_list, function(sp) {
+    
+    plot_data <- Top_5_yearly_percent_city_df %>%
+      dplyr::filter(City == ct, Species == sp)
+    
+    if (nrow(plot_data) == 0) return(NULL)
+    
+    ggplot(plot_data, aes(x = Year, y = percen_col)) +
+      
+      geom_line(linewidth = 1, color = "black") +
+      geom_point(size = 2,    color = "black") +
+      
+      scale_x_continuous(
+        breaks = min(Top_5_yearly_percent_city_df$Year):max(Top_5_yearly_percent_city_df$Year),
+        expand = c(0.01, 0)
+      ) +
+      
+      scale_y_continuous(
+        limits = c(0, NA),
+        expand = expansion(mult = c(0, 0.05))
+      ) +
+      
+      labs(
+        title = paste(ct, "—", sp),
+        x     = "Year",
+        y     = "WVC Proportion"
+      ) +
+      
+      theme_classic(base_size = 12) +
+      theme(
+        plot.title      = element_text(hjust = 0.5, face = "bold", size = 12),
+        axis.text.x     = element_text(size = 10, color = "black", angle = 45, hjust = 1),
+        axis.text.y     = element_text(size = 10, color = "black"),
+        axis.title      = element_text(size = 11, face = "bold"),
+        legend.position = "none",
+        panel.grid      = element_blank()
+      )
+  }) %>%
+    purrr::compact()
+})
+
+all_top_5_percent_plots <- purrr::flatten(Top5PercentYearplots)
+
+library(patchwork)
+combined_top_5_percent<-wrap_plots(all_top_5_percent_plots, ncol = length(species_list))
+
+print(combined_top_5_percent)
+
+#SVG
+ggsave("C:/Migracja/RStudio/WVCGraphs/combined_top_5_percent.svg", combined_top_5_percent, device = "svg")
+
+
+
+#Percentage of Top 5 Species in Seasons in each city in each year
+
+Top5Seasons_df<-as.data.frame(Top5Seasons)
+
+Top5Seasons_City_list <- unique(Top5Seasons_df$City)
+Top5Seasons_species_list <- unique(Top5Seasons_df$Species)
+
+total_per_city_year <- Top5Seasons_df %>%
+  group_by(City, Year) %>%
+  summarise(total_wvc = sum(WVC, na.rm = TRUE), .groups = "drop")
+
+# Add percentage column
+Top5Seasons_pct_df <- Top5Seasons_df %>%
+  left_join(total_per_city_year, by = c("City", "Year")) %>%
+  mutate(pct_wvc = WVC / total_wvc * 100)
+
+city_list    <- unique(Top5Seasons_pct_df$City)
+species_list <- unique(Top5Seasons_pct_df$Species)
+
+Top5Seasons_pct_plots <- lapply(city_list, function(ct) {
+  
+  lapply(species_list, function(sp) {
+    
+    Top5Seasonsplots_data <- Top5Seasons_pct_df %>%
+      dplyr::filter(City == ct, Species == sp)
+    
+    if (nrow(Top5Seasonsplots_data) == 0) return(NULL)
+    
+    ggboxplot(
+      Top5Seasonsplots_data,
+      x     = "Season",
+      y     = "pct_wvc",
+      fill  = "white",
+      color = "black",
+      add   = "none"
+    ) +
+      
+      scale_y_continuous(
+        limits = c(0, NA),
+        labels = scales::label_number(suffix = "%"),
+        expand = expansion(mult = c(0, 0.15))
+      ) +
+      
+      labs(
+        title = paste(ct, "—", sp),
+        x     = "Season",
+        y     = "WVC % of Annual Total"
+      ) +
+      
+      theme_classic(base_size = 12) +
+      theme(
+        plot.title  = element_text(hjust = 0.5, face = "bold", size = 12),
+        axis.text.x = element_text(size = 9, color = "black", angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 9, color = "black"),
+        axis.title  = element_text(size = 10, face = "bold"),
+        panel.grid  = element_blank()
+      )
+  }) %>%
+    purrr::compact()
+})
+
+Top5Seasons_pct_plots <- purrr::flatten(Top5Seasons_pct_plots)
+Top5Seasons_pct_wrap_plots <- wrap_plots(Top5Seasons_pct_plots, ncol = length(species_list))
+
+print(Top5Seasons_pct_wrap_plots)
+
+#SVG
+ggsave("C:/Migracja/RStudio/WVCGraphs/Top5Seasonspctwrapplots.svg", Top5Seasons_pct_wrap_plots, device = "svg")
+
+
+#Percentage of Top 5 Species- Peak Hours
+Top5Hours_df <- as.data.frame(Top5Hours)
+
+
+cat("\n🔄 Converting Excel datetime to radians using lubridate...\n")
+cat("Original Excel datetime values (first 5):\n")
+print(head(Top5Hours_df$Time, 5))
+
+Top5Hours_df$datetime <- as.POSIXct(Top5Hours_df$Time)
+
+if(all(is.na(Top5Hours_df$datetime))) {
+  cat("⚠️ First attempt failed. Trying with lubridate directly...\n")
+  Top5Hours_df$datetime <- lubridate::ymd_hms(Top5Hours_df$Time)
+}
+
+Top5Hours_df$hour         <- hour(Top5Hours_df$datetime)
+Top5Hours_df$minute       <- minute(Top5Hours_df$datetime)
+Top5Hours_df$second       <- second(Top5Hours_df$datetime)
+Top5Hours_df$decimal_hour <- Top5Hours_df$hour +
+  Top5Hours_df$minute / 60 +
+  Top5Hours_df$second / 3600
+Top5Hours_df$radians <- Top5Hours_df$decimal_hour * (2 * pi / 24)
+
+Top5time_df <- Top5Hours_df %>% select(Species, radians)
+
+# ===== BINNING =====
+Top5counts <- Top5time_df %>%
+  mutate(hour_bin = floor(radians / (2 * pi) * 24)) %>%
+  group_by(Species, hour_bin) %>%
+  summarise(count = n(), .groups = "drop")
+
+# Total per species only (no city split)
+total_per_species <- Top5counts %>%
+  group_by(Species) %>%
+  summarise(total = sum(count), .groups = "drop")
+
+all_bins <- expand.grid(
+  Species  = unique(Top5time_df$Species),
+  hour_bin = 0:23
+)
+
+Top5hourbinned_species <- all_bins %>%
+  left_join(Top5counts, by = c("Species", "hour_bin")) %>%
+  mutate(
+    count   = replace_na(count, 0),
+    bin_mid = (hour_bin + 0.5) / 24 * 2 * pi
+  ) %>%
+  left_join(total_per_species, by = "Species") %>%
+  mutate(proportion = count / total * 100)
+
+top5species_list <- unique(Top5hourbinned_species$Species)
+
+# ===== PLOTTING =====
+Top5Hour_plots <- lapply(top5species_list, function(sp) {
+  
+  Top5Hour_plot_data <- Top5hourbinned_species %>%
+    dplyr::filter(Species == sp)
+  
+  if (all(Top5Hour_plot_data$count == 0)) return(NULL)
+  
+  ggplot(Top5Hour_plot_data, aes(x = bin_mid, y = proportion)) +
+    
+    annotate("rect",
+             xmin = 0,           xmax = 6/24*2*pi,
+             ymin = -Inf,        ymax = Inf,
+             fill = "#AEC6E8",   alpha = 0.12
+    ) +
+    annotate("rect",
+             xmin = 6/24*2*pi,  xmax = 18/24*2*pi,
+             ymin = -Inf,        ymax = Inf,
+             fill = "#FFE680",   alpha = 0.12
+    ) +
+    annotate("rect",
+             xmin = 18/24*2*pi, xmax = 2*pi,
+             ymin = -Inf,        ymax = Inf,
+             fill = "#AEC6E8",   alpha = 0.12
+    ) +
+    
+    geom_smooth(
+      method    = "loess",
+      se        = FALSE,
+      color     = "black",
+      linewidth = 1,
+      span      = 0.4
+    ) +
+    
+    geom_vline(
+      xintercept = c(6/24*2*pi, 18/24*2*pi),
+      linetype   = "dashed",
+      color      = "gray50"
+    ) +
+    
+    scale_x_continuous(
+      limits = c(0, 2*pi),
+      breaks = seq(0, 2*pi, length.out = 13),
+      labels = c("00:00","02:00","04:00","06:00","08:00","10:00",
+                 "12:00","14:00","16:00","18:00","20:00","22:00","24:00"),
+      expand = c(0.01, 0)
+    ) +
+    
+    scale_y_continuous(
+      limits = c(0, NA),
+      labels = scales::label_number(suffix = "%"),
+      expand = expansion(mult = c(0, 0.05))
+    ) +
+    
+    labs(
+      title = sp,
+      x     = "Time of Day",
+      y     = "% of Species Collisions"
+    ) +
+    
+    theme_classic(base_size = 12) +
+    theme(
+      plot.title  = element_text(hjust = 0.5, face = "bold", size = 12),
+      axis.text.x = element_text(size = 8, color = "black", angle = 90, hjust = 1),
+      axis.text.y = element_text(size = 9, color = "black"),
+      axis.title  = element_text(size = 10, face = "bold"),
+      panel.grid  = element_blank()
+    )
+}) %>%
+  purrr::compact()
+
+wrapped_top5Hour_plots <- wrap_plots(Top5Hour_plots, ncol = 2)
+
+print(wrapped_top5Hour_plots)
+
+
+ggsave("C:/Migracja/RStudio/WVCGraphs/wrappedTop5Hourplots.svg", wrapped_top5Hour_plots, device = "svg")
+
+#GAM modelling
+
+
+# Step 1: Total collisions per species (denominator)
+gamtotal_per_species <- summary_df %>%
+  group_by(Species) %>%
+  summarise(species_total = n(), .groups = "drop")
+
+# Step 2: Count collisions per species and ONE predictor at a time
+# This gives you enough counts per cell for a stable GAM
+
+# By Season only
+gamcounts_season <- summary_df %>%
+  group_by(Species, Season) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  left_join(gamtotal_per_species, by = "Species") %>%
+  mutate(proportion = count / species_total)
+
+# By City only
+gamcounts_city <- summary_df %>%
+  group_by(Species, City) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  left_join(gamtotal_per_species, by = "Species") %>%
+  mutate(proportion = count / species_total)
+
+# By TimeOfDay only
+gamcounts_timeofday <- summary_df %>%
+  group_by(Species, TimeOfDay) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  left_join(gamtotal_per_species, by = "Species") %>%
+  mutate(proportion = count / species_total)
+
+# By Year only
+gamcounts_year <- summary_df %>%
+  group_by(Species, Year) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  left_join(gamtotal_per_species, by = "Species") %>%
+  mutate(proportion = count / species_total)
+
+
+print(gamcounts_season)
+print(gamcounts_city)
+print(gamcounts_timeofday)
+print(gamcounts_year)
+
+# ===== FIT GAM =====
+
+gam_counts_combined <- summary_df %>%
+  group_by(Species, Season, City, TimeOfDay, Year) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  left_join(gamtotal_per_species, by = "Species") %>%
+  mutate(
+    proportion = pmax(pmin(count / species_total, 0.9999), 0.0001),
+    Season     = factor(Season),
+    City       = factor(City),
+    TimeOfDay  = factor(TimeOfDay),
+    Year       = as.numeric(Year)
+  )
+
+print(gam_counts_combined)
+
+cat("Rows per species:\n")
+print(table(gam_counts_combined$Species))
+
+# Fit GAM per species
+
+
+gam_results <- lapply(species_list, function(sp) {
+  
+  sp_data <- gam_counts_combined %>%
+    dplyr::filter(Species == sp)
+  
+  cat("\nRows for", sp, ":", nrow(sp_data), "\n")
+  
+  if (nrow(sp_data) < 15) {
+    cat("Skipping", sp, "— too few rows\n")
+    return(NULL)
+  }
+  
+  model <- gam(
+    proportion ~ Season + City + TimeOfDay + s(Year, k = 4),
+    data   = sp_data,
+    family = betar(link = "logit"),
+    method = "REML"
+  )
+  
+  list(species = sp, model = model, summary = summary(model))
+}) %>%
+  purrr::compact()
+
+names(gam_results) <- sapply(gam_results, function(x) x$species)
+
+# Print summaries
+lapply(names(gam_results), function(sp) {
+  cat("\n========================================\n")
+  cat("Species:", sp, "\n")
+  cat("========================================\n")
+  print(gam_results[[sp]]$summary)
+})
+
+print(gam_results$hedgehog$summary)
+
+test_summary <- gam_results[[1]]$summary
+
+# Check parametric table column names
+print(colnames(as.data.frame(test_summary$p.table)))
+
+# Check smooth table column names
+print(colnames(as.data.frame(test_summary$s.table)))
+
+#Graphs
+
+year_plots <- lapply(names(gam_results), function(sp) {
+  
+  model <- gam_results[[sp]]$model
+  
+  # Extract smooth predictions for Year
+  year_range <- data.frame(
+    Year      = seq(min(gam_counts_combined$Year),
+                    max(gam_counts_combined$Year), length.out = 100),
+    Season    = factor(levels(gam_counts_combined$Season)[1],
+                       levels = levels(gam_counts_combined$Season)),
+    City      = factor(levels(gam_counts_combined$City)[1],
+                       levels = levels(gam_counts_combined$City)),
+    TimeOfDay = factor(levels(gam_counts_combined$TimeOfDay)[1],
+                       levels = levels(gam_counts_combined$TimeOfDay))
+  )
+  
+  pred <- predict(model, newdata = year_range, type = "response", se.fit = TRUE)
+  year_range$fit <- pred$fit
+  year_range$lwr <- pred$fit - 1.96 * pred$se.fit
+  year_range$upr <- pred$fit + 1.96 * pred$se.fit
+  
+  ggplot(year_range, aes(x = Year, y = fit)) +
+    geom_ribbon(aes(ymin = lwr, ymax = upr), fill = "#AEC6E8", alpha = 0.4) +
+    geom_line(linewidth = 1, color = "#1B9E77") +
+    scale_y_continuous(
+      labels = scales::label_percent(accuracy = 0.1),
+      expand = expansion(mult = c(0, 0.05))
+    ) +
+    labs(
+      title = paste(sp, "— Year trend"),
+      x     = "Year",
+      y     = "Predicted proportion"
+    ) +
+    theme_classic(base_size = 11) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),
+      panel.grid = element_blank()
+    )
+})
+
+wrap_plots(year_plots, ncol = 2)
+
+
+# ===== PLOT 2: Marginal effects of Season, City, TimeOfDay =====
+
+factor_plots <- lapply(names(gam_results), function(sp) {
+  
+  model    <- gam_results[[sp]]$model
+  sp_data  <- gam_counts_combined %>% dplyr::filter(Species == sp)
+  
+  # Season
+  season_grid <- expand.grid(
+    Season    = levels(sp_data$Season),
+    City      = levels(sp_data$City)[1],
+    TimeOfDay = levels(sp_data$TimeOfDay)[1],
+    Year      = mean(sp_data$Year)
+  )
+  pred_s <- predict(model, newdata = season_grid, type = "response", se.fit = TRUE)
+  season_grid$fit <- pred_s$fit
+  season_grid$lwr <- pred_s$fit - 1.96 * pred_s$se.fit
+  season_grid$upr <- pred_s$fit + 1.96 * pred_s$se.fit
+  
+  p_season <- ggplot(season_grid, aes(x = Season, y = fit)) +
+    geom_col(fill = "#7570B3", color = "black", width = 0.6) +
+    geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.2) +
+    scale_y_continuous(
+      labels = scales::label_percent(accuracy = 0.1),
+      expand = expansion(mult = c(0, 0.1))
+    ) +
+    labs(title = paste(sp, "— Season"), x = "Season", y = "Predicted proportion") +
+    theme_classic(base_size = 10) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+          panel.grid = element_blank())
+  
+  # City
+  city_grid <- expand.grid(
+    City      = levels(sp_data$City),
+    Season    = levels(sp_data$Season)[1],
+    TimeOfDay = levels(sp_data$TimeOfDay)[1],
+    Year      = mean(sp_data$Year)
+  )
+  pred_c <- predict(model, newdata = city_grid, type = "response", se.fit = TRUE)
+  city_grid$fit <- pred_c$fit
+  city_grid$lwr <- pred_c$fit - 1.96 * pred_c$se.fit
+  city_grid$upr <- pred_c$fit + 1.96 * pred_c$se.fit
+  
+  p_city <- ggplot(city_grid, aes(x = City, y = fit)) +
+    geom_col(fill = "#D95F02", color = "black", width = 0.6) +
+    geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.2) +
+    scale_y_continuous(
+      labels = scales::label_percent(accuracy = 0.1),
+      expand = expansion(mult = c(0, 0.1))
+    ) +
+    labs(title = paste(sp, "— City"), x = "City", y = "Predicted proportion") +
+    theme_classic(base_size = 10) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+          panel.grid = element_blank())
+  
+  # TimeOfDay
+  time_grid <- expand.grid(
+    TimeOfDay = levels(sp_data$TimeOfDay),
+    Season    = levels(sp_data$Season)[1],
+    City      = levels(sp_data$City)[1],
+    Year      = mean(sp_data$Year)
+  )
+  pred_t <- predict(model, newdata = time_grid, type = "response", se.fit = TRUE)
+  time_grid$fit <- pred_t$fit
+  time_grid$lwr <- pred_t$fit - 1.96 * pred_t$se.fit
+  time_grid$upr <- pred_t$fit + 1.96 * pred_t$se.fit
+  
+  p_time <- ggplot(time_grid, aes(x = TimeOfDay, y = fit)) +
+    geom_col(fill = "#1B9E77", color = "black", width = 0.6) +
+    geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.2) +
+    scale_y_continuous(
+      labels = scales::label_percent(accuracy = 0.1),
+      expand = expansion(mult = c(0, 0.1))
+    ) +
+    labs(title = paste(sp, "— Time of Day"), x = "Time of Day", y = "Predicted proportion") +
+    theme_classic(base_size = 10) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+          panel.grid = element_blank())
+  
+  # Combine three panels per species
+  p_season | p_city | p_time
+})
+
+# Print one combined plot per species
+lapply(factor_plots, print)
+
+# ===== PLOT 3: gratia draw (smooth term visualisation) =====
+
+lapply(names(gam_results), function(sp) {
+  
+  p <- draw(gam_results[[sp]]$model, residuals = FALSE) &
+    labs(title = paste("GAM smooth effects —", sp)) &
+    theme_classic(base_size = 11)
+  
+  print(p)
+})
+
+
+library(ggplot2)
+library(patchwork)
+library(rstatix)
+library(ggpubr)
+
+# ===== RAW PROPORTION PLOTS WITH GAM P-VALUES =====
+
+print(gam_results[[1]]$summary$p.table)
+
+test_p_table <- as.data.frame(gam_results[[1]]$summary$p.table) %>%
+  rownames_to_column("Term")
+colnames(test_p_table) <- make.names(colnames(test_p_table))
+
+print(colnames(test_p_table))
+
+print(test_p_table)
+
+test_p <- as.data.frame(gam_results[[1]]$summary$p.table)
+
+print(colnames(test_p))
+
+print(head(test_p))
+
+test_s <- as.data.frame(gam_results[[1]]$summary$s.table)
+print(colnames(test_s))
+print(head(test_s))
+
+top5target_species <- c("red_fox", "marten", "wild_boar", "roe_deer", "hedgehog")
+
+
+all_species_plots <- lapply(top5target_species, function(sp) {
+    
+    # Skip if species not in gam_results
+    if (is.null(gam_results[[sp]])) {
+      cat("Skipping", sp, "— not found in gam_results\n")
+      return(NULL)
+    }
+    
+    sp_data <- gam_counts_combined %>%
+      dplyr::filter(Species == sp)
+    
+    if (nrow(sp_data) == 0) {
+      cat("Skipping", sp, "— no data\n")
+      return(NULL)
+    }
+  # Extract model and summary from gam_results
+  model         <- gam_results[[sp]]$model
+  model_summary <- gam_results[[sp]]$summary
+  
+  p_table <- as.data.frame(model_summary$p.table)
+  p_table$Term <- rownames(p_table)
+  p_table$p_value <- p_table[["Pr(>|z|)"]]
+  
+  s_table <- as.data.frame(model_summary$s.table)
+  s_table$Term <- rownames(s_table)
+  s_table$p_value <- s_table[["p-value"]]
+  
+  # ===== SEASON =====
+  season_summary <- sp_data %>%
+    group_by(Season) %>%
+    summarise(
+      mean_prop = mean(proportion),
+      se_prop   = sd(proportion) / sqrt(n()),
+      .groups   = "drop"
+    )
+  
+  season_p <- min(p_table[grepl("Season", p_table$Term), "p_value"])
+  
+  p_season <- ggplot(season_summary, aes(x = Season, y = mean_prop)) +
+    geom_col(fill = "#7570B3", color = "black", width = 0.6) +
+    geom_errorbar(
+      aes(ymin = mean_prop - se_prop, ymax = mean_prop + se_prop),
+      width = 0.2
+    ) +
+    annotate("text", x = Inf, y = Inf,
+             label = paste("GAM p =", round(season_p, 4)),
+             hjust = 1.1, vjust = 1.5, size = 3, fontface = "italic") +
+    scale_y_continuous(
+      labels = scales::label_percent(accuracy = 0.1),
+      expand = expansion(mult = c(0, 0.15))
+    ) +
+    labs(title = "Season", x = "Season", y = "Mean proportion") +
+    theme_classic(base_size = 10) +
+    theme(
+      plot.title  = element_text(hjust = 0.5, face = "bold"),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      panel.grid  = element_blank()
+    )
+  
+  # ===== CITY =====
+  city_summary <- sp_data %>%
+    group_by(City) %>%
+    summarise(
+      mean_prop = mean(proportion),
+      se_prop   = sd(proportion) / sqrt(n()),
+      .groups   = "drop"
+    )
+  
+  city_p <- min(p_table[grepl("City", p_table$Term), "p_value"])
+  
+  p_city <- ggplot(city_summary, aes(x = City, y = mean_prop)) +
+    geom_col(fill = "#D95F02", color = "black", width = 0.6) +
+    geom_errorbar(
+      aes(ymin = mean_prop - se_prop, ymax = mean_prop + se_prop),
+      width = 0.2
+    ) +
+    annotate("text", x = Inf, y = Inf,
+             label = paste("GAM p =", round(city_p, 4)),
+             hjust = 1.1, vjust = 1.5, size = 3, fontface = "italic") +
+    scale_y_continuous(
+      labels = scales::label_percent(accuracy = 0.1),
+      expand = expansion(mult = c(0, 0.15))
+    ) +
+    labs(title = "City", x = "City", y = "Mean proportion") +
+    theme_classic(base_size = 10) +
+    theme(
+      plot.title  = element_text(hjust = 0.5, face = "bold"),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      panel.grid  = element_blank()
+    )
+  
+  # ===== TIME OF DAY =====
+  time_summary <- sp_data %>%
+    group_by(TimeOfDay) %>%
+    summarise(
+      mean_prop = mean(proportion),
+      se_prop   = sd(proportion) / sqrt(n()),
+      .groups   = "drop"
+    )
+  
+  time_p <- min(p_table[grepl("TimeOfDay", p_table$Term), "p_value"])
+  
+  p_time <- ggplot(time_summary, aes(x = TimeOfDay, y = mean_prop)) +
+    geom_col(fill = "#1B9E77", color = "black", width = 0.6) +
+    geom_errorbar(
+      aes(ymin = mean_prop - se_prop, ymax = mean_prop + se_prop),
+      width = 0.2
+    ) +
+    annotate("text", x = Inf, y = Inf,
+             label = paste("GAM p =", round(time_p, 4)),
+             hjust = 1.1, vjust = 1.5, size = 3, fontface = "italic") +
+    scale_y_continuous(
+      labels = scales::label_percent(accuracy = 0.1),
+      expand = expansion(mult = c(0, 0.15))
+    ) +
+    labs(title = "Time of Day", x = "Time of Day", y = "Mean proportion") +
+    theme_classic(base_size = 10) +
+    theme(
+      plot.title  = element_text(hjust = 0.5, face = "bold"),
+      panel.grid  = element_blank()
+    )
+  
+  # ===== YEAR =====
+  year_summary <- sp_data %>%
+    group_by(Year) %>%
+    summarise(mean_prop = mean(proportion), .groups = "drop")
+  
+  smooth_p <- min(s_table[grepl("Year", s_table$Term), "p_value"])
+  
+  p_year <- ggplot(year_summary, aes(x = Year, y = mean_prop)) +
+    geom_point(size = 2, color = "black") +
+    geom_smooth(
+      method    = "loess",
+      se        = TRUE,
+      color     = "#185FA5",
+      fill      = "#AEC6E8",
+      linewidth = 1
+    ) +
+    annotate("text", x = Inf, y = Inf,
+             label = paste("GAM smooth p =", round(smooth_p, 4)),
+             hjust = 1.1, vjust = 1.5, size = 3, fontface = "italic") +
+    scale_x_continuous(breaks = min(sp_data$Year):max(sp_data$Year)) +
+    scale_y_continuous(
+      labels = scales::label_percent(accuracy = 0.1),
+      expand = expansion(mult = c(0, 0.15))
+    ) +
+    labs(title = "Year trend", x = "Year", y = "Mean proportion") +
+    theme_classic(base_size = 10) +
+    theme(
+      plot.title  = element_text(hjust = 0.5, face = "bold"),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      panel.grid  = element_blank()
+    )
+  
+  # ===== COMBINE =====
+  (p_season | p_city | p_time | p_year) +
+    plot_annotation(
+      title = paste("Collision proportions —", sp),
+      theme = theme(
+        plot.title = element_text(hjust = 0.5, face = "bold", size = 13)
+      )
+    )
+}) %>%
+  purrr::compact()
+
+
+
+
+
+
+# Save all
+
+
+pdf("C:/Migracja/RStudio/WVCGraphs/GAM_species_plots.pdf", width = 14, height = 5)
+lapply(all_species_plots, print)
+dev.off()
+
+#Other models
+
+#Setting up dataframe
+
+
+#What's the aim of the gam model? What factors should be included?
+#What would be the best possibility for finding the influence on wvc. All others need to be independent
+
+
+#GLMMS
+
+
+
+# ===== STEP 1: PREPARE DATA FRAME =====
+
+target_species <- c("red_fox", "marten", "wild_boar", "roe_deer", "hedgehog")
+
+# Filter to top 5 species and drop unneeded columns
+glmm_base_df <- summary_df %>%
+  dplyr::filter(Species %in% target_species) %>%
+  dplyr::select(City, Year, Season, TimeOfDay, Species) %>%
+  mutate(
+    Species   = factor(Species),
+    Season    = factor(Season),
+    City      = factor(City),
+    TimeOfDay = factor(TimeOfDay),
+    Year      = factor(Year)
+  )
+
+print(head(glmm_base_df))
+print(table(glmm_base_df$Species))
+
+# ===== STEP 2: COUNT COLLISIONS PER CELL =====
+
+# Total per species (denominator)
+glmm_total_per_species <- glmm_base_df %>%
+  group_by(Species) %>%
+  summarise(species_total = n(), .groups = "drop")
+
+# Count per species, city, year, season, timeofday
+glmm_counts <- glmm_base_df %>%
+  group_by(Species, City, Year, Season, TimeOfDay) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  left_join(glmm_total_per_species, by = "Species") %>%
+  mutate(
+    failures  = species_total - count,
+    Species   = factor(Species),
+    Season    = factor(Season,    levels = c("spring", "summer", "autumn", "winter")),
+    City      = factor(City),
+    TimeOfDay = factor(TimeOfDay, levels = c("light", "dark")),
+    Year      = factor(Year)
+  )
+
+print(head(glmm_counts))
+cat("\nRows per species:\n")
+print(table(glmm_counts$Species))
+
+# ===== STEP 3: FIT GLMM PER SPECIES =====
+
+glmm_results <- lapply(target_species, function(sp) {
+  
+  sp_data <- glmm_counts %>%
+    dplyr::filter(Species == sp)
+  
+  cat("\n========================================\n")
+  cat("Species:", sp, "— rows:", nrow(sp_data), "\n")
+  cat("========================================\n")
+  
+  if (nrow(sp_data) < 10) {
+    cat("Skipping", sp, "— too few rows\n")
+    return(NULL)
+  }
+  
+  # Fit GLMM: Season + City + TimeOfDay as fixed effects, Year as random effect
+  model <- tryCatch({
+    glmer(
+      cbind(count, failures) ~ Season + City + TimeOfDay + (1 | Year),
+      data   = sp_data,
+      family = binomial(link = "logit"),
+      control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5))
+    )
+  }, error = function(e) {
+    cat("Model failed for", sp, ":", e$message, "\n")
+    return(NULL)
+  })
+  
+  if (is.null(model)) return(NULL)
+  
+  print(summary(model))
+  
+  list(
+    species = sp,
+    model   = model,
+    data    = sp_data
+  )
+}) %>%
+  purrr::compact()
+
+names(glmm_results) <- sapply(glmm_results, function(x) x$species)
+
+# ===== STEP 4: EXTRACT RESULTS TABLE =====
+
+glmm_table <- lapply(names(glmm_results), function(sp) {
+  
+  model <- glmm_results[[sp]]$model
+  coefs <- as.data.frame(summary(model)$coefficients)
+  coefs$Term    <- rownames(coefs)
+  coefs$p_value <- coefs[[4]]
+  coefs$Species <- sp           # add Species here
+  rownames(coefs) <- NULL
+  coefs$p_adj   <- p.adjust(coefs$p_value, method = "BH")
+  coefs$sig     <- case_when(
+    coefs$p_adj < 0.001 ~ "***",
+    coefs$p_adj < 0.01  ~ "**",
+    coefs$p_adj < 0.05  ~ "*",
+    TRUE                ~ "ns"
+  )
+  coefs %>% dplyr::select(Species, Term, Estimate, `Std. Error`, `z value`, p_value, p_adj, sig)
+}) %>%
+  bind_rows()
+
+print(glmm_table)
+write.csv(glmm_table, "C:/Migracja/RStudio/WVCGraphs/GLMM_results.csv", row.names = FALSE)
+
+# ===== STEP 5: PLOT RESULTS =====
+
+  
+
+glmm_plots <- lapply(names(glmm_results), function(sp) {
+  
+  sp_data <- glmm_results[[sp]]$data
+  model   <- glmm_results[[sp]]$model
+  coefs   <- as.data.frame(summary(model)$coefficients)
+  coefs$Term    <- rownames(coefs)
+  coefs$p_value <- coefs[[4]]
+  
+  # ===== SEASON =====
+  season_summary <- sp_data %>%
+    group_by(Season) %>%
+    summarise(
+      mean_prop = mean(count / species_total),
+      se_prop   = sd(count / species_total) / sqrt(n()),
+      .groups   = "drop"
+    )
+  
+  season_p <- min(coefs[grepl("Season", coefs$Term), "p_value"])
+  
+  p_season <- ggplot(season_summary, aes(x = Season, y = mean_prop)) +
+    geom_col(fill = "#7570B3", color = "black", width = 0.6) +
+    geom_errorbar(aes(ymin = mean_prop - se_prop,
+                      ymax = mean_prop + se_prop), width = 0.2) +
+    annotate("text", x = Inf, y = Inf,
+             label = paste("p =", round(season_p, 4)),
+             hjust = 1.1, vjust = 1.5, size = 3, fontface = "italic") +
+    scale_y_continuous(labels = scales::label_percent(accuracy = 0.1),
+                       expand = expansion(mult = c(0, 0.15))) +
+    labs(title = "Season", x = "Season", y = "Mean proportion") +
+    theme_classic(base_size = 10) +
+    theme(plot.title  = element_text(hjust = 0.5, face = "bold"),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          panel.grid  = element_blank())
+  
+  # ===== CITY =====
+  city_summary <- sp_data %>%
+    group_by(City) %>%
+    summarise(
+      mean_prop = mean(count / species_total),
+      se_prop   = sd(count / species_total) / sqrt(n()),
+      .groups   = "drop"
+    )
+  
+  city_p <- min(coefs[grepl("City", coefs$Term), "p_value"])
+  
+  p_city <- ggplot(city_summary, aes(x = City, y = mean_prop)) +
+    geom_col(fill = "#D95F02", color = "black", width = 0.6) +
+    geom_errorbar(aes(ymin = mean_prop - se_prop,
+                      ymax = mean_prop + se_prop), width = 0.2) +
+    annotate("text", x = Inf, y = Inf,
+             label = paste("p =", round(city_p, 4)),
+             hjust = 1.1, vjust = 1.5, size = 3, fontface = "italic") +
+    scale_y_continuous(labels = scales::label_percent(accuracy = 0.1),
+                       expand = expansion(mult = c(0, 0.15))) +
+    labs(title = "City", x = "City", y = "Mean proportion") +
+    theme_classic(base_size = 10) +
+    theme(plot.title  = element_text(hjust = 0.5, face = "bold"),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          panel.grid  = element_blank())
+  
+  # ===== TIME OF DAY =====
+  time_summary <- sp_data %>%
+    group_by(TimeOfDay) %>%
+    summarise(
+      mean_prop = mean(count / species_total),
+      se_prop   = sd(count / species_total) / sqrt(n()),
+      .groups   = "drop"
+    )
+  
+  time_p <- min(coefs[grepl("TimeOfDay", coefs$Term), "p_value"])
+  
+  p_time <- ggplot(time_summary, aes(x = TimeOfDay, y = mean_prop)) +
+    geom_col(fill = "#1B9E77", color = "black", width = 0.6) +
+    geom_errorbar(aes(ymin = mean_prop - se_prop,
+                      ymax = mean_prop + se_prop), width = 0.2) +
+    annotate("text", x = Inf, y = Inf,
+             label = paste("p =", round(time_p, 4)),
+             hjust = 1.1, vjust = 1.5, size = 3, fontface = "italic") +
+    scale_y_continuous(labels = scales::label_percent(accuracy = 0.1),
+                       expand = expansion(mult = c(0, 0.15))) +
+    labs(title = "Time of Day", x = "Time of Day", y = "Mean proportion") +
+    theme_classic(base_size = 10) +
+    theme(plot.title  = element_text(hjust = 0.5, face = "bold"),
+          panel.grid  = element_blank())
+  
+  # ===== YEAR (random effect) =====
+  year_var <- as.data.frame(VarCorr(model))
+  year_sd  <- year_var$sdcor[1]
+  
+  year_summary <- sp_data %>%
+    group_by(Year) %>%
+    summarise(mean_prop = mean(count / species_total), .groups = "drop") %>%
+    mutate(Year = as.numeric(as.character(Year)))
+  
+  p_year <- ggplot(year_summary, aes(x = Year, y = mean_prop)) +
+    geom_point(size = 2, color = "black") +
+    geom_smooth(method = "loess", se = TRUE,
+                color = "#185FA5", fill = "#AEC6E8", linewidth = 1) +
+    annotate("text", x = Inf, y = Inf,
+             label = paste("Year SD =", round(year_sd, 3)),
+             hjust = 1.1, vjust = 1.5, size = 3, fontface = "italic") +
+    scale_x_continuous(breaks = min(year_summary$Year):max(year_summary$Year)) +
+    scale_y_continuous(labels = scales::label_percent(accuracy = 0.1),
+                       expand = expansion(mult = c(0, 0.15))) +
+    labs(title = "Year (random effect)", x = "Year", y = "Mean proportion") +
+    theme_classic(base_size = 10) +
+    theme(plot.title  = element_text(hjust = 0.5, face = "bold"),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          panel.grid  = element_blank())
+  
+  # ===== COMBINE =====
+  (p_season | p_city | p_time | p_year) +
+    plot_annotation(
+      title = paste("GLMM collision proportions —", sp),
+      theme = theme(
+        plot.title = element_text(hjust = 0.5, face = "bold", size = 13)
+      )
+    )
+})
+
+lapply(glmm_plots, print)
+
+pdf("C:/Migracja/RStudio/WVCGraphs/GLMM_species_plots.pdf", width = 14, height = 5)
+lapply(glmm_plots, print)
+dev.off()
